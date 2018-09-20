@@ -4,34 +4,41 @@
 # @Author  : yinwb
 # @File    : setting.py
 
+# layers need to train
 TRAIN_LAYERS = ("fc6", "fc7", "fc8")
 
+# number of output class
 NUM_CLASS = 21
 
-# 图像大小与通道数
 IMAGE_SIZE = 227
 IMAGE_CHANNEL = 3
 
-# 神经网络配置参数
-BATCH_SIZE = 16  # 小批量梯度下降每个batch的样本数
-EPOCH = 100  # 训练轮数
+BATCH_SIZE = 32
+EPOCH = 100
 
-LEARNING_RATE_BASE = 0.01  # 基础学习率
-LEARNIING_RATE_DECAY = 0.99  # 学习率的衰减率
+LEARNING_RATE_BASE = 0.00001
+LEARNING_RATE_DECAY = 0.99
 
-REGULARIZATION_RATE = 0.0001  # 损失函数中模型参数正则化项的权重
-MOVING_AVERAGE_DECAY = 0.99  # 滑动平均衰减率
+REGULARIZATION_RATE = 0.01
+MOVING_AVERAGE_DECAY = 0.99
 
-## 训练数据
+# train dataset
 TRAIN_TF_RECORD = '../data/train.tfrecord'
 
+# validation dataset
 VALIDATION_TF_RECORD = '../data/validation.tfrecord'
 
-##
+# testing dataset
+TEST_TF_RECORD = '../data/test.tfrecord'
+
+# pretrained model on ImageNet which convert from caffemodel to npy by caffe-tensorflow
 PRE_TRAIN_MODLE ='../data/bvlc_alexnet.npy'
 
-#
-IMAGE_MEAN=[0, 0, 0]
+# the mean file of train dataset
+IMAGE_MEAN_FILE='../data/alexnet.mean.227.npy'
 
-SAVE_MODEL_PATH_NAME ='../data/model'
+# where to save model
+SAVE_MODEL_PATH_NAME ='../data/model/'
 
+# summary dir
+SUMMARY_PATH='../data/visual_metrics'

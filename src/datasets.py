@@ -14,7 +14,7 @@ def tf_record_num_examples(tf_file):
     return count
 
 
-def tf_record_parser(image_height, image_width, num_class, image_mean):
+def tf_record_parser(image_height, image_width, num_class, image_mean, train=True):
     def helper(serilized_example):
         features = tf.parse_single_example(
             serilized_example,
@@ -34,13 +34,16 @@ def tf_record_parser(image_height, image_width, num_class, image_mean):
         image_shape = tf.stack([height, width, channel])
         image = tf.reshape(image, image_shape)
         image = tf.cast(image, tf.float32)
+        image = tf.image.resize_image_with_crop_or_pad(image, image_height, image_width)
         if image_mean is not None:
-            image = tf.subtract(image, tf.constant(image_mean, shape=[3], name='image_mean', dtype=tf.float32))
+            image = tf.subtract(image, tf.constant(image_mean, name='image_mean', dtype=tf.float32))
 
-        image_clip = tf.image.resize_image_with_crop_or_pad(image, image_height, image_width)
+        if train:
+            image = tf.image.random_flip_up_down(image)
+            image = tf.image.random_flip_left_right(image)
 
-        label_onehot = tf.one_hot(label, num_class)
+        label = tf.one_hot(label, num_class)
 
-        return image_clip, label_onehot
+        return image, label
 
     return helper
