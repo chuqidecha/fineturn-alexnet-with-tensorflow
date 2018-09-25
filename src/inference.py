@@ -16,21 +16,21 @@ def variable_summaries(var, name):
 
 def conv_with_groups(name_scope, xs, ws, groups, strides, padding):
     with tf.name_scope(name_scope):
-        ws_groups = tf.split(ws, groups, axis=3)
-        xs_groups = tf.split(xs, groups, axis=3)
+        ws_groups = tf.split(value=ws, num_or_size_splits=groups, axis=3)
+        xs_groups = tf.split(value=xs, num_or_size_splits=groups, axis=3)
         conv_groups = [tf.nn.conv2d(x, w, [1, 1, 1, 1], padding=padding) for w, x in zip(ws_groups, xs_groups)]
         conv = tf.concat(values=conv_groups, axis=3)
     return conv
 
 
-def inference(input_tensor, output_dim, train=True, regularizer=None):
+def inference(input_tensor, output_dim, keep_prob, regularizer=None):
     '''
     AlexNet
     '''
     with tf.variable_scope("conv1"):
         weights = tf.get_variable('weights', [11, 11, 3, 96], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [96], initializer=tf.constant_initializer(0.0))
-        conv1 = tf.nn.conv2d(input_tensor, weights, [1, 4, 4, 1], padding="VALID") + biases
+        conv1 = tf.nn.bias_add(tf.nn.conv2d(input_tensor, weights, [1, 4, 4, 1], padding="VALID"), biases)
         variable_summaries(weights, "conv1/weights")
         variable_summaries(biases, "conv1/biases")
 
@@ -38,22 +38,22 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
         relu1 = tf.nn.relu(conv1)
 
     with tf.name_scope("lrn1"):
-        lrn1 = tf.nn.lrn(relu1, depth_radius=5, bias=2, alpha=0.0001, beta=0.75)
+        lrn1 = tf.nn.lrn(relu1, depth_radius=2, bias=1, alpha=0.00002, beta=0.75)
     with tf.name_scope("pool1"):
         pool1 = tf.nn.max_pool(lrn1, [1, 3, 3, 1], [1, 2, 2, 1], padding="VALID")
 
     with tf.variable_scope("conv2"):
         weights = tf.get_variable('weights', [5, 5, 48, 256], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [256], initializer=tf.constant_initializer(0.0))
-        conv2 = conv_with_groups("conv2-groups", pool1, weights, 2, [1, 1, 1, 1], padding="SAME") + biases
+        conv2 = tf.nn.bias_add(conv_with_groups("conv2-groups", pool1, weights, 2, [1, 1, 1, 1], padding="SAME"),
+                               biases)
         variable_summaries(weights, "conv2/weights")
         variable_summaries(biases, "conv2/biases")
 
     with tf.name_scope("relu2"):
         relu2 = tf.nn.relu(conv2)
-
     with tf.name_scope("lrn2"):
-        lrn2 = tf.nn.lrn(relu2, depth_radius=5, bias=2, alpha=0.0001, beta=0.75)
+        lrn2 = tf.nn.lrn(relu2, depth_radius=2, bias=1, alpha=0.00002, beta=0.75)
 
     with tf.name_scope("pool2"):
         pool2 = tf.nn.max_pool(lrn2, [1, 3, 3, 1], [1, 2, 2, 1], padding="VALID")
@@ -61,7 +61,7 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
     with tf.variable_scope("conv3"):
         weights = tf.get_variable('weights', [3, 3, 256, 384], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [384], initializer=tf.constant_initializer(0.0))
-        conv3 = tf.nn.conv2d(pool2, weights, [1, 1, 1, 1], padding="SAME") + biases
+        conv3 = tf.nn.bias_add(tf.nn.conv2d(pool2, weights, [1, 1, 1, 1], padding="SAME"), biases)
         variable_summaries(weights, "conv3/weights")
         variable_summaries(biases, "conv3/biases")
 
@@ -71,7 +71,8 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
     with tf.variable_scope("conv4"):
         weights = tf.get_variable('weights', [3, 3, 192, 384], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [384], initializer=tf.constant_initializer(0.0))
-        conv4 = conv_with_groups("conv4-groups", relu3, weights, 2, [1, 1, 1, 1], padding="SAME") + biases
+        conv4 = tf.nn.bias_add(conv_with_groups("conv4-groups", relu3, weights, 2, [1, 1, 1, 1], padding="SAME"),
+                               biases)
         variable_summaries(weights, "conv4/weights")
         variable_summaries(biases, "conv4/biases")
 
@@ -81,7 +82,8 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
     with tf.variable_scope("conv5"):
         weights = tf.get_variable('weights', [3, 3, 192, 256], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [256], initializer=tf.constant_initializer(0.0))
-        conv5 = conv_with_groups("conv5-groups", relu4, weights, 2, [1, 1, 1, 1], padding="SAME") + biases
+        conv5 = tf.nn.bias_add(conv_with_groups("conv5-groups", relu4, weights, 2, [1, 1, 1, 1], padding="SAME"),
+                               biases)
         variable_summaries(weights, "conv5/weights")
         variable_summaries(biases, "conv5/biases")
 
@@ -105,8 +107,7 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
         relu6 = tf.nn.relu(fc6)
 
     with tf.name_scope("dropout6"):
-        if train:
-            relu6 = tf.nn.dropout(relu6, 0.5)
+        relu6 = tf.nn.dropout(relu6, keep_prob)
 
     with tf.variable_scope("fc7"):
         weights = tf.get_variable('weights', [4096, 4096], initializer=tf.truncated_normal_initializer(stddev=0.1))
@@ -121,8 +122,7 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
         relu7 = tf.nn.relu(fc7)
 
     with tf.name_scope("dropout7"):
-        if train:
-            relu7 = tf.nn.dropout(relu7, 0.5)
+        relu7 = tf.nn.dropout(relu7, keep_prob)
 
     with tf.variable_scope("fc8"):
         weights = tf.get_variable('weights', [4096, output_dim],
@@ -134,15 +134,3 @@ def inference(input_tensor, output_dim, train=True, regularizer=None):
         variable_summaries(weights, "fc8/weights")
         variable_summaries(biases, "fc8/biases")
     return fc8
-
-
-def loss_with_l2_regularization(logits, labels):
-    '''
-    cross entropy with L2 Regularization
-    '''
-    with tf.name_scope("cross_entropy"):
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=labels)
-        cross_entropy_mean = tf.reduce_mean(cross_entropy)
-        loss = cross_entropy_mean + tf.add_n(tf.get_collection("losses"))
-
-    return loss

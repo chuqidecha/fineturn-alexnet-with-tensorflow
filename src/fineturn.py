@@ -19,17 +19,15 @@ logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
 def load_weights_biases(sess, pre_train_model):
     weights_dict = np.load(pre_train_model, encoding='bytes').item()
-
     for op_name in weights_dict:
         with tf.variable_scope(op_name, reuse=True):
             if op_name not in TRAIN_LAYERS:
                 for item in weights_dict[op_name]:
                     if len(item.shape) == 1:
-
-                        biases = tf.get_variable("biases", trainable=True)
+                        biases = tf.get_variable("biases")
                         sess.run(biases.assign(item))
                     else:
-                        weights = tf.get_variable("weights", trainable=True)
+                        weights = tf.get_variable("weights")
                         sess.run(weights.assign(item))
 
 
@@ -44,7 +42,7 @@ def train_val(train_tf_file, validation_tf_file):
         train_dataset = train_dataset.repeat(None).shuffle(1024).batch(BATCH_SIZE)
         validation_parse = tf_record_parser(IMAGE_SIZE, IMAGE_SIZE, NUM_CLASS, image_mean, train=False)
         validation_dataset = tf.data.TFRecordDataset(validation_tf_file).map(validation_parse)
-        validation_dataset = validation_dataset.repeat(1).shuffle(1024).batch(BATCH_SIZE)
+        validation_dataset = validation_dataset.repeat(1).shuffle(1024).batch(2100)
         iter = tf.data.Iterator.from_structure(train_dataset.output_types, train_dataset.output_shapes)
         image_batch, label_batch = iter.get_next()
 
@@ -54,8 +52,10 @@ def train_val(train_tf_file, validation_tf_file):
     # L2 regularization
     regularizer = tf.contrib.layers.l2_regularizer(REGULARIZATION_RATE)
 
+    keep_prob = tf.placeholder(dtype=tf.float32)
+
     # forward propagation
-    y_halt = inference(image_batch, NUM_CLASS, regularizer=regularizer)
+    y_halt = inference(image_batch, NUM_CLASS, keep_prob, regularizer=regularizer)
 
     # learning rate
     global_step = tf.Variable(0, trainable=False)
@@ -68,18 +68,26 @@ def train_val(train_tf_file, validation_tf_file):
     )
 
     # cross entropy loss with L2 regularization
-    with tf.name_scope("cross_entropy"):
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=y_halt, labels=label_batch)
-        l2_regularization = tf.add_n(tf.get_collection("losses"))
-        batch_loss_sum = tf.reduce_sum(cross_entropy)
-        cross_entropy_mean = tf.reduce_mean(cross_entropy)
-        loss = cross_entropy_mean + l2_regularization
+    with tf.name_scope("loss"):
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=y_halt, labels=label_batch))
+        tf.add_to_collection("losses", cross_entropy)
+        loss = tf.add_n(tf.get_collection("losses"))
 
     with tf.name_scope('accuracy'):
         correct_prediction = tf.equal(tf.argmax(y_halt, 1), tf.argmax(label_batch, 1))
-        correct_count = tf.reduce_sum(tf.cast(correct_prediction, tf.int32))
+        score = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
+    with tf.name_scope('train'):
+        var_list = [v for v in tf.trainable_variables() if v.name.split('/')[0] in TRAIN_LAYERS]
+
+        # Get gradients of all trainable variables
+        gradients = tf.gradients(loss, var_list)
+        gradients = list(zip(gradients, var_list))
+
+        # Create optimizer and apply gradient descent to the trainable variables
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        train_op = optimizer.apply_gradients(grads_and_vars=gradients, global_step=global_step)
+        # train_op = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
 
     saver = tf.train.Saver(max_to_keep=EPOCH)
 
@@ -89,12 +97,11 @@ def train_val(train_tf_file, validation_tf_file):
         summary_writer = tf.summary.FileWriter(SUMMARY_PATH, sess.graph)
         init = tf.global_variables_initializer()
         sess.run(init)
-        #load_weights_biases(sess, PRE_TRAIN_MODLE)
-
+        # load_weights_biases(sess, PRE_TRAIN_MODLE)
         for epoch in range(EPOCH):
             sess.run(training_init_op)
             for batch in range(train_batches_per_epoch):
-                summary,loss_, _ = sess.run([merged,loss, train_step])
+                summary, loss_, _ = sess.run([merged, loss, train_op], feed_dict={keep_prob: 0.5})
                 logging.info(
                     'after {0} step(s),training loss on batch is {1:.5f}'.format(
                         epoch * train_batches_per_epoch + batch,
@@ -103,19 +110,13 @@ def train_val(train_tf_file, validation_tf_file):
             saver.save(sess, SAVE_MODEL_PATH_NAME, global_step=global_step)
             sess.run(validation_init_op)
 
-            loss_ = 0
-            regularization_ = sess.run(l2_regularization)
-            validation_correct_count = 0
             while True:
                 try:
-                    batch_loss, batch_correct_count = sess.run([batch_loss_sum, correct_count])
-                    loss_ += batch_loss
-                    validation_correct_count += batch_correct_count
+                    loss_, score_ = sess.run([loss, score], feed_dict={keep_prob: 1.0})
                 except tf.errors.OutOfRangeError:
                     logging.info(
-                        'after {0} epoch(s),loss on validation is {1:.5f},and accuracy is {2:.5f}'.format(
-                            epoch, loss_ / val_num_examples + regularization_,
-                                   validation_correct_count / val_num_examples))
+                        'after {0} epoch(s),loss on validation is {1:.5f},and accuracy is {2:.5f}'.format(epoch, loss_,
+                                                                                                          score_))
                     break
 
 
