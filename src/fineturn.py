@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 18-9-14 下午10:39
+# @Time    : 18-9-14 10:39 pm
 # @Author  : yinwb
 # @File    : fineturn.py
 import logging
