@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 18-9-12 下午8:48
+# @Time    : 18-9-12 8:48pm
 # @Author  : yinwb
 # @File    : create_file_list.py
 
@@ -74,6 +73,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     if args.id is not None:
-        ids = np.loadtxt(os.path.join(args.root_dir,args.id), dtype=str)
+        ids = np.loadtxt(os.path.join(args.root_dir, args.id), dtype=str)
         class_dict = dict(zip(ids[:, 1], ids[:, 0]))
     create_file_list(args.root_dir, args.output, class_dict, args.test, args.validation, args.seed)

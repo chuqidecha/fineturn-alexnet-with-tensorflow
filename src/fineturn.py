@@ -15,23 +15,6 @@ LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
 
-def load_weights_biases(sess, pre_train_model, train_layers):
-    '''
-    load pretrain weights and biases
-    '''
-    weights_dict = np.load(pre_train_model, encoding='bytes').item()
-    for op_name in weights_dict:
-        with tf.variable_scope(op_name, reuse=True):
-            if op_name not in train_layers:
-                for item in weights_dict[op_name]:
-                    if len(item.shape) == 1:
-                        biases = tf.get_variable("biases")
-                        sess.run(biases.assign(item))
-                    else:
-                        weights = tf.get_variable("weights")
-                        sess.run(weights.assign(item))
-
-
 def fineturn(train_tf_file,
              validation_tf_file,
              pretrain_model,
@@ -69,7 +52,6 @@ def fineturn(train_tf_file,
     regularizer = tf.contrib.layers.l2_regularizer(regularization_rate)
 
     keep_prob = tf.placeholder(dtype=tf.float32)
-    summary_type = tf.placeholder(dtype=tf.string)
 
     # forward propagation
     y_halt = inference(image_batch, num_class, keep_prob, regularizer=regularizer)
