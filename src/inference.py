@@ -28,24 +28,21 @@ def load_weights_biases(sess, pre_train_model, train_layers):
                         sess.run(weights.assign(item))
 
 
-def _variable_summaries(var, name):
+def trainable_variable_summaries():
     '''
     日志
     :param var:
     :param name:
     :return:
     '''
-    with tf.variable_scope("log-summaries"):
-        tf.summary.histogram(name, var)
-
-        mean = tf.reduce_mean(var)
-
-        tf.summary.scalar("mean/" + name, mean)
-
-        stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-
-        tf.summary.scalar("stddev/" + name, stddev)
-
+    with tf.name_scope("params"):
+        for variable in tf.trainable_variables():
+            name = variable.name.split(':')[0]
+            tf.summary.histogram(name, variable)
+            mean = tf.reduce_mean(variable)
+            tf.summary.scalar("mean/" + name, mean)
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(variable - mean)))
+            tf.summary.scalar("stddev/" + name, stddev)
 
 def _conv_with_groups(name_scope, xs, ws, groups, strides, padding):
     '''
@@ -61,7 +58,7 @@ def _conv_with_groups(name_scope, xs, ws, groups, strides, padding):
     with tf.name_scope(name_scope):
         ws_groups = tf.split(value=ws, num_or_size_splits=groups, axis=3)
         xs_groups = tf.split(value=xs, num_or_size_splits=groups, axis=3)
-        conv_groups = [tf.nn.conv2d(x, w, [1, 1, 1, 1], padding=padding) for w, x in zip(ws_groups, xs_groups)]
+        conv_groups = [tf.nn.conv2d(x, w, strides, padding=padding) for w, x in zip(ws_groups, xs_groups)]
         conv = tf.concat(values=conv_groups, axis=3)
     return conv
 
@@ -79,8 +76,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         weights = tf.get_variable('weights', [11, 11, 3, 96], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [96], initializer=tf.constant_initializer(0.0))
         conv1 = tf.nn.bias_add(tf.nn.conv2d(input_tensor, weights, [1, 4, 4, 1], padding="VALID"), biases)
-        _variable_summaries(weights, "conv1/weights")
-        _variable_summaries(biases, "conv1/biases")
 
     with tf.name_scope("relu1"):
         relu1 = tf.nn.relu(conv1)
@@ -95,8 +90,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         biases = tf.get_variable('biases', [256], initializer=tf.constant_initializer(0.0))
         conv2 = tf.nn.bias_add(_conv_with_groups("conv2-groups", pool1, weights, 2, [1, 1, 1, 1], padding="SAME"),
                                biases)
-        _variable_summaries(weights, "conv2/weights")
-        _variable_summaries(biases, "conv2/biases")
 
     with tf.name_scope("relu2"):
         relu2 = tf.nn.relu(conv2)
@@ -110,8 +103,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         weights = tf.get_variable('weights', [3, 3, 256, 384], initializer=tf.truncated_normal_initializer(stddev=0.1))
         biases = tf.get_variable('biases', [384], initializer=tf.constant_initializer(0.0))
         conv3 = tf.nn.bias_add(tf.nn.conv2d(pool2, weights, [1, 1, 1, 1], padding="SAME"), biases)
-        _variable_summaries(weights, "conv3/weights")
-        _variable_summaries(biases, "conv3/biases")
 
     with tf.name_scope("relu3"):
         relu3 = tf.nn.relu(conv3)
@@ -121,8 +112,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         biases = tf.get_variable('biases', [384], initializer=tf.constant_initializer(0.0))
         conv4 = tf.nn.bias_add(_conv_with_groups("conv4-groups", relu3, weights, 2, [1, 1, 1, 1], padding="SAME"),
                                biases)
-        _variable_summaries(weights, "conv4/weights")
-        _variable_summaries(biases, "conv4/biases")
 
     with tf.name_scope("relu4"):
         relu4 = tf.nn.relu(conv4)
@@ -132,8 +121,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         biases = tf.get_variable('biases', [256], initializer=tf.constant_initializer(0.0))
         conv5 = tf.nn.bias_add(_conv_with_groups("conv5-groups", relu4, weights, 2, [1, 1, 1, 1], padding="SAME"),
                                biases)
-        _variable_summaries(weights, "conv5/weights")
-        _variable_summaries(biases, "conv5/biases")
 
     with tf.name_scope("relu5"):
         relu5 = tf.nn.relu(conv5)
@@ -148,8 +135,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         fc6 = tf.nn.xw_plus_b(flattened, weights, biases)
         if regularizer is not None:
             tf.add_to_collection("losses", regularizer(weights))
-        _variable_summaries(weights, "fc6/weights")
-        _variable_summaries(biases, "fc6/biases")
 
     with tf.name_scope("relu6"):
         relu6 = tf.nn.relu(fc6)
@@ -163,8 +148,6 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         fc7 = tf.nn.xw_plus_b(relu6, weights, biases)
         if regularizer is not None:
             tf.add_to_collection("losses", regularizer(weights))
-        _variable_summaries(weights, "fc7/weights")
-        _variable_summaries(biases, "fc7/biases")
 
     with tf.name_scope("relu7"):
         relu7 = tf.nn.relu(fc7)
@@ -179,6 +162,5 @@ def inference(input_tensor, output_dim, keep_prob, regularizer=None):
         if regularizer is not None:
             tf.add_to_collection("losses", regularizer(weights))
         fc8 = tf.nn.xw_plus_b(relu7, weights, biases)
-        _variable_summaries(weights, "fc8/weights")
-        _variable_summaries(biases, "fc8/biases")
+
     return fc8

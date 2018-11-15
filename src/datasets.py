@@ -7,13 +7,6 @@
 import tensorflow as tf
 
 
-def tf_record_num_examples(tf_file):
-    count = 0
-    for _ in tf.python_io.tf_record_iterator(tf_file):
-        count += 1
-    return count
-
-
 def tf_record_parser(image_height, image_width, num_class, image_mean, train=True):
     def helper(serilized_example):
         features = tf.parse_single_example(
@@ -47,3 +40,30 @@ def tf_record_parser(image_height, image_width, num_class, image_mean, train=Tru
         return image, label
 
     return helper
+
+
+class ImageTFRecordDataset(object):
+    def __init__(self, tf_file, parser, batch_size):
+        self._num_examples = self._tf_record_num_examples(tf_file)
+        self._dataset = tf.data \
+            .TFRecordDataset(tf_file) \
+            .map(parser) \
+            .repeat(1) \
+            .shuffle(256) \
+            .batch(batch_size)
+        self._iterator = self._dataset.make_initializable_iterator()
+
+    def _tf_record_num_examples(self, tf_file):
+        count = 0
+        for _ in tf.python_io.tf_record_iterator(tf_file):
+            count += 1
+        return count
+
+    def num_examples(self):
+        return self._num_examples
+
+    def get_next(self):
+        return self._iterator.get_next()
+
+    def initializer(self):
+        return self._iterator.initializer

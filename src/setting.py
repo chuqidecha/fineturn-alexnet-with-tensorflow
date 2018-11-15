@@ -31,7 +31,7 @@ VALIDATION_TF_RECORD = '../data/validation.tfrecord'
 # testing dataset
 TEST_TF_RECORD = '../data/test.tfrecord'
 
-# pretrained model on ImageNet which convert from caffemodel to npy by caffe-tensorflow
+# pretrained model on ImageNet which converted from caffemodel to npy by caffe-tensorflow
 PRE_TRAIN_MODLE ='../data/bvlc_alexnet.npy'
 
 # the mean file of train dataset
