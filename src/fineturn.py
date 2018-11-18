@@ -2,6 +2,7 @@
 # @Time    : 18-9-14 10:39 pm
 # @Author  : yinwb
 # @File    : fineturn.py
+import os
 import logging
 import math
 
@@ -102,7 +103,7 @@ if __name__ == '__main__':
              setting.IMAGE_SIZE,
              setting.NUM_CLASS,
              setting.TRAIN_LAYERS,
-             setting.SAVE_MODEL_PATH_NAME,
+             os.path.join(setting.SAVE_MODEL_PATH,setting.SAVE_MODEL_NAME),
              setting.SUMMARY_PATH,
              setting.BATCH_SIZE,
              setting.EPOCH,

@@ -20,7 +20,6 @@ LEARNING_RATE_BASE = 0.0001
 LEARNING_RATE_DECAY = 0.99
 
 REGULARIZATION_RATE = 0.001
-MOVING_AVERAGE_DECAY = 0.99
 
 # train dataset
 TRAIN_TF_RECORD = '../data/train.tfrecord'
@@ -38,7 +37,8 @@ PRE_TRAIN_MODLE ='../data/bvlc_alexnet.npy'
 IMAGE_MEAN_FILE='../data/alexnet.mean.227.npy'
 
 # where to save model
-SAVE_MODEL_PATH_NAME ='../data/model/model'
+SAVE_MODEL_PATH ='../data/model'
+SAVE_MODEL_NAME='alexnet'
 
 # summary dir
 SUMMARY_PATH='../data/visual_metrics'

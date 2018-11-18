@@ -7,28 +7,33 @@ import logging
 import tensorflow as tf
 import numpy as np
 
-import setting
 from datasets import ImageTFRecordDataset
 from datasets import tf_record_parser
 from inference import inference
+import setting
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
 
-def evaldate():
-    # with tf.Graph().as_default() as g:
+def validate(tf_file,
+             image_size,
+             num_class,
+             model_path,
+             batch_size=32,
+             regularization_rate=0.01,
+             image_mean=None):
     with tf.name_scope('input'):
-        parser = tf_record_parser(setting.IMAGE_SIZE, setting.IMAGE_SIZE, setting.NUM_CLASS,
-                                  image_mean=np.load(setting.IMAGE_MEAN_FILE), train=False)
-        dataset = ImageTFRecordDataset(setting.VALIDATION_TF_RECORD, parser, setting.BATCH_SIZE)
+        parser = tf_record_parser(image_size, image_size, num_class,
+                                  image_mean=np.load(image_mean), train=False)
+        dataset = ImageTFRecordDataset(tf_file, parser, batch_size)
         image_batch, label_batch = dataset.get_next()
         initializer = dataset.initializer()
 
     # L2 regularization
-    regularizer = tf.contrib.layers.l2_regularizer(setting.REGULARIZATION_RATE)
+    regularizer = tf.contrib.layers.l2_regularizer(regularization_rate)
     keep_prob = tf.placeholder(dtype=tf.float32)
-    y_halt = inference(image_batch, setting.NUM_CLASS, keep_prob, regularizer)
+    y_halt = inference(image_batch, num_class, keep_prob, regularizer)
 
     with tf.name_scope('loss'):
         cross_entropy = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(logits=y_halt, labels=label_batch))
@@ -41,13 +46,12 @@ def evaldate():
 
     saver = tf.train.Saver()
     num_examples = dataset.num_examples()
-    print(num_examples)
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
 
-        cpkt = tf.train.get_checkpoint_state('../data/model')
+        cpkt = tf.train.get_checkpoint_state(model_path)
         if cpkt is not None and len(cpkt.all_model_checkpoint_paths) > 0:
             for model_checkpoint_path in cpkt.all_model_checkpoint_paths:
                 # 获取迭代的轮数
@@ -70,4 +74,10 @@ def evaldate():
 
 
 if __name__ == "__main__":
-    evaldate()
+    validate(setting.VALIDATION_TF_RECORD,
+             setting.IMAGE_SIZE,
+             setting.NUM_CLASS,
+             setting.SAVE_MODEL_PATH,
+             setting.BATCH_SIZE,
+             setting.REGULARIZATION_RATE,
+             setting.IMAGE_MEAN_FILE)
