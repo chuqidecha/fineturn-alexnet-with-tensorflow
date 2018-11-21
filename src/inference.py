@@ -44,15 +44,16 @@ def trainable_variable_summaries():
             stddev = tf.sqrt(tf.reduce_mean(tf.square(variable - mean)))
             tf.summary.scalar("stddev/" + name, stddev)
 
+
 def _conv_with_groups(name_scope, xs, ws, groups, strides, padding):
     '''
     模拟多个GPU
-    :param name_scope:
-    :param xs:
-    :param ws:
-    :param groups:
-    :param strides:
-    :param padding:
+    :param name_scope: 命名空间
+    :param xs: 输入Tensor
+    :param ws: 权值Tensor
+    :param groups: GPU数目
+    :param strides: 步长
+    :param padding: 边缘填充方式
     :return:
     '''
     with tf.name_scope(name_scope):

@@ -1,11 +1,13 @@
 # 使用TensorFlow微调AlexNet
 
+* 项目地址[https://github.com/chuqidecha/fineturn-alexnet-with-tensorflow](https://github.com/chuqidecha/fineturn-alexnet-with-tensorflow)
+* 本文中所有用到的数据可以从这里下载[https://pan.baidu.com/s/1-Ijn7E87ZUBcwMmsq2CeYg](https://pan.baidu.com/s/1-Ijn7E87ZUBcwMmsq2CeYg)
+
 ## 从caffemode中获取预训练权值
 TensorFlow中没有预训练好的AlexNet模型，利用[caffe-tensorflow](https://github.com/ethereon/caffe-tensorflow)工具可以将
 在caffe上预训练好的AlexNet模型转成numpy的npy格式。该项目已经一年多没有人维护了，可能存在python、protobuf、tensorflow等版本不
 兼容的问题。[这里](https://github.com/chuqidecha/caffe-tensorflow)是我改好的一个版本，使用Python3.6、protobuf3.6、tensorflow1.10版本。
-从[Caffe Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)中可以下载在ImageNet上预训练好的AlexNet模型。
-在[这里](https://pan.baidu.com/s/1b9N-z-5fYibKd8O2Vlg0Tg)下载已经转换好的参数文件(bvlc_alexnet.npy)。
+从[Caffe Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)中可以下载在ImageNet上预训练好的AlexNet模型。我转好好的模型为data目录下的validation.tfrecord。
 
 ## AlexNet模型结构与参数
 AlexNet模型共有5个卷积层，3个全连接层，前两个卷积层和第五个卷积层后有池化层。
@@ -41,27 +43,156 @@ AlexNet模型共有5个卷积层，3个全连接层，前两个卷积层和第�
 节点数为1000，参数个数为4096\*1000+1000=4097000
 
 
-## 在TensorFlow上实现AlexNet
+## 在TensorFlow上微调AlexNet的主要代码
 
 ### 环境
+* Python 3.6.6
 * tensorflow 1.10
 * opencv 3.4.3.18
 
-### 主要代码
-- [src/inference.py](./src/inference.py)
-    - inference AlexNet模型实现
-    - load_weights_biases 从预训练模型中加载参数
-- [src/validate_alexnet_on_imagenet.py](./src/validate_alexnet_on_imagenet.py) 验证模型是否正确
-- [src/setting](./src/setting) 主要参数配置
--
+### AlexNet实现
+```Python
+def _conv_with_groups(name_scope, xs, ws, groups, strides, padding):
+    '''
+    模拟多个GPU
+    :param name_scope: 命名空间
+    :param xs: 输入Tensor
+    :param ws: 权值Tensor
+    :param groups: GPU数目
+    :param strides: 步长
+    :param padding: 边缘填充方式
+    :return:
+    '''
+    with tf.name_scope(name_scope):
+        ws_groups = tf.split(value=ws, num_or_size_splits=groups, axis=3)
+        xs_groups = tf.split(value=xs, num_or_size_splits=groups, axis=3)
+        conv_groups = [tf.nn.conv2d(x, w, strides, padding=padding) for w, x in zip(ws_groups, xs_groups)]
+        conv = tf.concat(values=conv_groups, axis=3)
+    return conv
 
+def inference(input_tensor, output_dim, keep_prob, regularizer=None):
+    '''
+    AlexNet模型实现
+    :param input_tensor: 输入[None,227,227,3]
+    :param output_dim: 分类数
+    :param keep_prob: dropout概率
+    :param regularizer: 正则化项
+    :return:
+    '''
+    with tf.variable_scope("conv1"):
+        weights = tf.get_variable('weights', [11, 11, 3, 96], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [96], initializer=tf.constant_initializer(0.0))
+        conv1 = tf.nn.bias_add(tf.nn.conv2d(input_tensor, weights, [1, 4, 4, 1], padding="VALID"), biases)
 
+    with tf.name_scope("relu1"):
+        relu1 = tf.nn.relu(conv1)
+
+    with tf.name_scope("lrn1"):
+        lrn1 = tf.nn.lrn(relu1, depth_radius=2, bias=1, alpha=0.00002, beta=0.75)
+    with tf.name_scope("pool1"):
+        pool1 = tf.nn.max_pool(lrn1, [1, 3, 3, 1], [1, 2, 2, 1], padding="VALID")
+
+    with tf.variable_scope("conv2"):
+        weights = tf.get_variable('weights', [5, 5, 48, 256], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [256], initializer=tf.constant_initializer(0.0))
+        conv2 = tf.nn.bias_add(_conv_with_groups("conv2-groups", pool1, weights, 2, [1, 1, 1, 1], padding="SAME"),
+                               biases)
+
+    with tf.name_scope("relu2"):
+        relu2 = tf.nn.relu(conv2)
+    with tf.name_scope("lrn2"):
+        lrn2 = tf.nn.lrn(relu2, depth_radius=2, bias=1, alpha=0.00002, beta=0.75)
+
+    with tf.name_scope("pool2"):
+        pool2 = tf.nn.max_pool(lrn2, [1, 3, 3, 1], [1, 2, 2, 1], padding="VALID")
+
+    with tf.variable_scope("conv3"):
+        weights = tf.get_variable('weights', [3, 3, 256, 384], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [384], initializer=tf.constant_initializer(0.0))
+        conv3 = tf.nn.bias_add(tf.nn.conv2d(pool2, weights, [1, 1, 1, 1], padding="SAME"), biases)
+
+    with tf.name_scope("relu3"):
+        relu3 = tf.nn.relu(conv3)
+
+    with tf.variable_scope("conv4"):
+        weights = tf.get_variable('weights', [3, 3, 192, 384], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [384], initializer=tf.constant_initializer(0.0))
+        conv4 = tf.nn.bias_add(_conv_with_groups("conv4-groups", relu3, weights, 2, [1, 1, 1, 1], padding="SAME"),
+                               biases)
+
+    with tf.name_scope("relu4"):
+        relu4 = tf.nn.relu(conv4)
+
+    with tf.variable_scope("conv5"):
+        weights = tf.get_variable('weights', [3, 3, 192, 256], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [256], initializer=tf.constant_initializer(0.0))
+        conv5 = tf.nn.bias_add(_conv_with_groups("conv5-groups", relu4, weights, 2, [1, 1, 1, 1], padding="SAME"),
+                               biases)
+
+    with tf.name_scope("relu5"):
+        relu5 = tf.nn.relu(conv5)
+
+    with tf.name_scope("pool5"):
+        pool5 = tf.nn.max_pool(relu5, [1, 3, 3, 1], [1, 2, 2, 1], padding="VALID")
+
+    with tf.variable_scope("fc6"):
+        weights = tf.get_variable('weights', [9216, 4096], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [4096], initializer=tf.constant_initializer(0.0))
+        flattened = tf.reshape(pool5, [-1, 6 * 6 * 256])
+        fc6 = tf.nn.xw_plus_b(flattened, weights, biases)
+        if regularizer is not None:
+            tf.add_to_collection("losses", regularizer(weights))
+
+    with tf.name_scope("relu6"):
+        relu6 = tf.nn.relu(fc6)
+
+    with tf.name_scope("dropout6"):
+        relu6 = tf.nn.dropout(relu6, keep_prob)
+
+    with tf.variable_scope("fc7"):
+        weights = tf.get_variable('weights', [4096, 4096], initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [4096], initializer=tf.constant_initializer(0.0))
+        fc7 = tf.nn.xw_plus_b(relu6, weights, biases)
+        if regularizer is not None:
+            tf.add_to_collection("losses", regularizer(weights))
+
+    with tf.name_scope("relu7"):
+        relu7 = tf.nn.relu(fc7)
+
+    with tf.name_scope("dropout7"):
+        relu7 = tf.nn.dropout(relu7, keep_prob)
+
+    with tf.variable_scope("fc8"):
+        weights = tf.get_variable('weights', [4096, output_dim],
+                                  initializer=tf.truncated_normal_initializer(stddev=0.1))
+        biases = tf.get_variable('biases', [output_dim], initializer=tf.constant_initializer(0.0))
+        if regularizer is not None:
+            tf.add_to_collection("losses", regularizer(weights))
+        fc8 = tf.nn.xw_plus_b(relu7, weights, biases)
+
+    return fc8
+```
 
 ### 验证模型
-为了测试模型是否正确，并且参数是否被正确赋值，可以创建一个ImageNet原始模型（最后一层有1000个类别）并将微调的网络层设置为空。
+为了测试模型是否正确，并且参数是否被正确赋值，可以创建一个ImageNet原始模型（最后一层有1000个类别）并将微调的网络层设置为空（为了从caffemodel中加载所有参数）。
 从原始ImageNet数据集中随机抽取了几张图片进行预测分类，下面是分类结果：
 ![image](./resources/validate.png)
-从上图可以看出，模型正确并且参数被正确赋值。
+从上图可以看出，模型正确并且参数被正确赋值。分类代码参考[validate_alexnet_on_imagenet.py](./src/validate_alexnet_on_imagenet.py)
+
+### 微调网络
+微调网络代码参考[fineturn.py](./src/fineturn.py)，需要注意的是，采用优化算法时，一定要设置var_list参数，否则会微调所有网路参数。
+```Python
+with tf.name_scope('train'):
+        trainable_variables = [v for v in tf.trainable_variables() if v.name.split('/')[0] in train_layers]
+        train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step,
+                                                                               var_list=trainable_variables)
+```
+## 在UCMerced_LandUse遥感数据集上微和测试
+UCMerced\_LandUse数据集共有21个类别，每个类别100幅。数据集详情见[http://weegee.vision.ucmerced.edu/datasets/landuse.html](http://weegee.vision.ucmerced.edu/datasets/landuse.html)。
+
+实验中，将数据集按照0.8,0.1,0.1的权值分成训练、测试、验证集，并转换成tfrecord格式。并固定卷基层参数，在训练集上微调全连接层，参数参见[setting.py](./src/setting.py)。保存每一个epoch的模型，在验证集上测试，选择最好的模型，在测试集上完成测试。
+
+
 
 ## 踩过的坑
 
