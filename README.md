@@ -7,7 +7,7 @@
 TensorFlow中没有预训练好的AlexNet模型，利用[caffe-tensorflow](https://github.com/ethereon/caffe-tensorflow)工具可以将
 在caffe上预训练好的AlexNet模型转成numpy的npy格式。该项目已经一年多没有人维护了，可能存在python、protobuf、tensorflow等版本不
 兼容的问题。[这里](https://github.com/chuqidecha/caffe-tensorflow)是我改好的一个版本，使用Python3.6、protobuf3.6、tensorflow1.10版本。
-从[Caffe Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)中可以下载在ImageNet上预训练好的AlexNet模型。我转好好的模型为data目录下的validation.tfrecord。
+从[Caffe Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)中可以下载在ImageNet上预训练好的AlexNet模型。
 
 ## AlexNet模型结构与参数
 AlexNet模型共有5个卷积层，3个全连接层，前两个卷积层和第五个卷积层后有池化层。
@@ -190,9 +190,40 @@ with tf.name_scope('train'):
 ## 在UCMerced_LandUse遥感数据集上微和测试
 UCMerced\_LandUse数据集共有21个类别，每个类别100幅。数据集详情见[http://weegee.vision.ucmerced.edu/datasets/landuse.html](http://weegee.vision.ucmerced.edu/datasets/landuse.html)。
 
-实验中，将数据集按照0.8,0.1,0.1的权值分成训练、测试、验证集，并转换成tfrecord格式。并固定卷基层参数，在训练集上微调全连接层，参数参见[setting.py](./src/setting.py)。保存每一个epoch的模型，在验证集上测试，选择最好的模型，在测试集上完成测试。
+实验中，将数据集按照0.8,0.1,0.1的权值分成训练、测试、验证集，并转换成tfrecord格式。并固定卷积层参数，在训练集上微调全连接层，参数参见[setting.py](./src/setting.py)。保存每一个epoch的模型，在验证集上测试，选择最好的模型，在测试集上完成测试。
 
+* 验证集上的loss和accuracy
 
+![验证集上loss](./resources/validata-loss.png)
+
+![验证集上的准确率](resources/validata-accuracy.png)
+
+* 测试集上的准确率
+![测试集上的准确率](resources/result-heatmap.png)
+predicted|agricultural|airplane|baseballdiamond|beach|buildings|chaparral|denseresidential|forest|freeway|golfcourse|harbor|intersection|mediumresidential|mobilehomepark|overpass|parkinglot|river|runway|sparseresidential|storagetanks|tenniscourt|准确率|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|agricultural|10|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1.00|
+|airplane|0|9|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1.00|
+|baseballdiamond|0|0|9|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1.00|
+|beach|0|0|0|10|0|0|0|0|0|0|0|0|0|0|0|0|1|0|0|0|0|0.91|
+|buildings|0|0|0|0|7|0|3|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0.70|
+|chaparral|0|0|0|0|0|8|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1.00|
+|denseresidential|0|0|0|0|0|0|3|0|0|0|0|0|3|2|0|0|0|0|0|0|0|0.38|
+|forest|1|0|0|0|0|0|0|14|0|0|0|0|0|0|0|0|0|0|0|0|0|0.93|
+|freeway|0|0|0|0|0|0|0|0|12|0|0|0|0|0|0|0|0|0|0|0|0|1.00|
+|golfcourse|0|0|0|0|0|0|0|0|0|11|0|0|0|0|0|0|2|0|1|0|0|0.73|
+|harbor|0|0|0|0|0|0|0|0|0|0|8|0|0|0|0|0|0|0|0|0|0|1.00|
+|intersection|0|0|0|0|0|0|0|0|0|0|0|9|0|0|0|0|0|0|0|0|0|1.00|
+|mediumresidential|0|0|0|0|2|0|2|0|0|0|0|0|5|0|0|0|0|0|1|1|1|0.42|
+|mobilehomepark|0|0|0|0|0|0|0|0|0|0|0|0|0|12|0|0|0|0|0|0|0|1.00|
+|overpass|0|0|0|0|0|0|0|0|0|0|0|0|0|0|8|0|0|0|0|0|0|1.00|
+|parkinglot|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|10|0|0|0|0|0|1.00|
+|river|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|9|0|0|0|0|1.00|
+|runway|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|13|0|0|0|1.00|
+|sparseresidential|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|10|0|0|1.00|
+|storagetanks|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|6|0|1.00|
+|tenniscourt|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|7|1.00|
+|召回率|0.91|1.00|1.00|1.00|0.78|1.00|0.38|1.00|1.00|1.00|1.00|1.00|0.62|0.86|1.00|1.00|0.75|1.00|0.83|0.86|0.88|--|
 
 ## 踩过的坑
 
